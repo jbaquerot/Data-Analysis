@@ -1,0 +1,267 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Raw Interest Rate Analysis</title>
+<!-- <link href="stylesheet.css" rel="stylesheet"> -->
+</head>
+
+<body>
+
+<h1>Raw Interest Rate Analysis</h1>
+
+<h2>Load Library<h2>
+
+
+<h2>Processing</h2>
+<p>Download the data, read the data in and save as an RDA file</p>
+
+<!--begin.rcode Data treatment
+getwd()
+#download.file("https://spark-public.s3.amazonaws.com/dataanalysis/loansData.csv", destfile="../../../data/loansData.csv", method = "curl")
+dateDownloaded <- date()
+dateDownloaded
+loans <- read.csv("../../../data/loansData.csv",stringsAsFactors=FALSE)
+#save(loans,dateDownloaded, file="../../../data/loansData.rda")
+end.rcode-->
+
+<h2>Munging Data</h2>
+<!--begin.rcode Munging Data
+#Convert Interest Rate to numeric
+loans$Interest.Rate<-as.numeric(gsub("%","",loans$Interest.Rate))
+#Convert Loan Lenght to numeric
+loans$Loan.Length <- as.numeric(gsub("months","",loans$Loan.Length))
+#Factor Loan Purpose
+loans$Loan.Purpose <- as.factor(loans$Loan.Purpose)
+#Convert Debt to Income Ratio to numeric
+loans$Debt.To.Income.Ratio <- as.numeric(gsub("%","",loans$Debt.To.Income.Ratio))
+#Factor State
+loans$State <- as.factor(loans$State)
+#Factor Home Ownership
+loans$Home.Ownership <- as.factor(loans$Home.Ownership)
+#Factor FICO Range
+loans$FICO.Range <- as.factor(loans$FICO.Range)
+#Factor Employment Lenght
+loans$Employment.Length <- as.factor(loans$Employment.Length)
+end.rcode-->
+
+
+
+<h3>Look at the data set</h3>
+
+<!--begin.rcode Look at the data set
+head(loans)
+summary(loans)
+sapply(loans[1, ], class)
+end.rcode-->
+
+<h3>Find out about missing values</h3>
+<!--begin.rcode Find out Missing values
+sum(is.na(loans))
+end.rcode-->
+
+<h2>Exploratory Analysis</h2>
+<h3>Make some univariate plots/summaries</h3>
+<!--begin.rcode Some unviariate plots/summaries
+hist(loans$Amount.Requested, 
+     main="Histogram of Amount Requested",
+     xlab="Amont Requested")
+quantile(loans$Amount.Requested)
+
+hist(loans$Amount.Funded.By.Investors,
+     main="Histogram of Amount Funded By Investors",
+     xlab="Amont Funded By Investors")
+quantile(loans$Amount.Funded.By.Investors)
+
+hist(loans$Interest.Rate,
+     main="Histogram of Interest Rate",
+     xlab="Interest Rate (%)")
+quantile(loans$Interest.Rate)
+
+hist(loans$Loan.Length,
+     main="Histogram of Loan Lenght",
+     xlab="Loan Lenght (months)")
+quantile(loans$Loan.Length)
+
+hist(loans$Debt.To.Income.Ratio,
+     main="Histogram of Debt to Income Ratio",
+     xlab="Debt to Income Ratio (%)")
+quantile(loans$Debt.To.Income.Ratio)
+
+hist(log(loans$Monthly.Income),
+     main="Histogram of log(Monthly Income)",
+     xlab="Monthly Income (log($))")
+quantile(loans$Monthly.Income, na.rm=TRUE)
+
+hist(loans$Open.CREDIT.Lines,
+     main="Histogram of Number of Credit Lines",
+     xlab="Number of Credit Lines")
+quantile(loans$Open.CREDIT.Lines, na.rm=TRUE)
+
+hist(log(loans$Revolving.CREDIT.Balance),
+     main="Histogram of Revolving Credit Balance",
+     xlab="Revolving Credit Balance (log($)")
+quantile(log(loans$Revolving.CREDIT.Balance), na.rm=TRUE )
+
+hist(loans$Inquiries.in.the.Last.6.Months,
+     main="Histogram of Number Inquiries in the last 6 months",
+     xlab="Number of Inquiries in the last 6 months")
+quantile(loans$Inquiries.in.the.Last.6.Months, na.rm=TRUE)
+
+end.rcode-->
+
+<h3>Make some univariate tables</h3>
+<!--begin.rcode
+summary(loans$Loan.Purpose)
+
+summary(loans$State)
+
+summary(loans$Home.Ownership)
+
+summary(loans$FICO.Range)
+
+summary(loans$Employment.Length)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Amount Requested (FICO Colored)</h3>
+<!--begin.rcode Plot Interest Rate vs Amount Requested
+par(mar=c(4,4,2,0.5),col=palette(heat.colors(48)))
+layout(matrix(c(1, 1, 2, 2), 2, 2, byrow=F), widths=c(3,1))
+
+plot(loans$Amount.Requested,loans$Interest.Rate, pch=19,
+     col=loans$FICO.Range, 
+     ylab="Interest Rate (%)", 
+     xlab="Amount Request ($)", 
+     main="Interest Rate vs Amount Requested (FICO Colored)",
+     cex=0.7)
+lmIRAR <- lm(loans$Interest.Rate ~ loans$Amount.Requested)
+lines(loans$Amount.Requested,lmIRAR$fitted,
+      col="Black",lwd=3)
+plot.new()
+legend("center","groups",legend=sort(unique(loans$FICO.Range)), 
+       col=sort(unique(loans$FICO.Range)),cex=0.7,pch=19, 
+       title="FICO Score",ncol=1)
+summary(lmIRAR)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Amount Funded By Investors (FICO Colored)</h3>
+<!--begin.rcode Plot Interest Rate vs Amount Funded By Investors
+par(mar=c(4,4,2,0.5),col=palette(heat.colors(48)))
+layout(matrix(c(1, 1, 2, 2), 2, 2, byrow=F), widths=c(3,1))
+plot(loans$Amount.Funded.By.Investors,loans$Interest.Rate, pch=19, col=loans$FICO.Range, ylab="Interest Rate (%)", xlab="Amount Funded By Investors ($)", main="Interest Rate vs Amount Funded By Investors (FICO Colored)")
+lmIRAFBI <- lm(loans$Interest.Rate ~ loans$Amount.Funded.By.Investors)
+lines(loans$Amount.Funded.By.Investors,lmIRAFBI$fitted,
+      col="black",lwd=3)
+plot.new()
+legend("center","groups",legend=sort(unique(loans$FICO.Range)), 
+       col=sort(unique(loans$FICO.Range)),cex=0.7,pch=19, 
+       title="FICO Score",ncol=1)
+summary(lmIRAFBI)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Loan Lenght</h3>
+<!--begin.rcode Plot Interest Rate vs Loan Lenght
+boxplot(loans$Interest.Rate ~ loans$Loan.Length, ylab="Interest Rate(%)", xlab="Loan Lenght (months)", main="Plot Interest Rate vs Loan Lenght")
+lmIRLL <- lm(loans$Interest.Rate ~ loans$Loan.Length)
+summary(lmIRLL)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Loan Purpose</h3>
+<!--begin.rcode Plot Interest Rate vs Loan Purpose
+boxplot(loans$Interest.Rate ~ loans$Loan.Purpose, ylab="Interest Rate(%)", main="Plot Interest Rate vs Loan Porpose", las=3, cex.axis=0.6)
+lmIRLP <- lm(loans$Interest.Rate ~ loans$Loan.Purpose)
+summary(lmIRLP)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Debt to income ratio (FICO Colored)</h3>
+<!--begin.rcode Plot Interest Rate vs Debt to income ratio
+par(mar=c(4,4,2,0.5),col=palette(heat.colors(48)))
+layout(matrix(c(1, 1, 2, 2), 2, 2, byrow=F), widths=c(3,1))
+plot(loans$Debt.To.Income.Ratio,loans$Interest.Rate, pch=19, col=loans$FICO.Range, ylab="Interest Rate (%)", xlab="Debt to income ratio (%)", main="Interest Rate vs Debt to income ratio (FICO Colored)")
+lmIRDIR <- lm(loans$Interest.Rate ~ loans$Debt.To.Income.Ratio)
+lines(loans$Debt.To.Income.Ratio, lmIRDIR$fitted,
+      col="black",lwd=3)
+plot.new()
+legend("center","groups",legend=sort(unique(loans$FICO.Range)), 
+       col=sort(unique(loans$FICO.Range)),cex=0.7,pch=19, 
+       title="FICO Score",ncol=1)
+summary(lmIRDIR)
+end.rcode-->
+
+<h3>Plot Interest Rate vs State</h3>
+<!--begin.rcode Plot Interest Rate vs State
+boxplot(loans$Interest.Rate ~ loans$State, xlab="State", ylab="Interest Rate(%)", main="Plot Interest Rate vs State", las=3, cex.axis=0.6)
+lmIRST <- lm(loans$Interest.Rate ~ loans$State)
+summary(lmIRST)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Home Ownership</h3>
+<!--begin.rcode Plot Interest Rate vs Home Ownership
+boxplot(loans$Interest.Rate ~ loans$Home.Ownership, xlab="Home Ownership", ylab="Interest Rate(%)", main="Plot Interest Rate vs Home Ownership", las=3, cex.axis=0.6)
+lmIRHO <- lm(loans$Interest.Rate ~ loans$Home.Ownership)
+summary(lmIRHO)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Monthly Income (log) (FICO Colored)</h3>
+<!--begin.rcode Plot Interest Rate vs Monthly Income
+par(mar=c(4,4,2,0.5),col=palette(heat.colors(48)))
+layout(matrix(c(1, 1, 2, 2), 2, 2, byrow=F), widths=c(3,1))
+3
+plot(log(loans$Monthly.Income),loans$Interest.Rate, pch=19, col=loans$FICO.Range, ylab="Interest Rate (%)", xlab="Monthly Income (log($))", main="Interest Rate vs log(Monthly Income) (FICO Colored)")
+lmIRMI <- lm(loans$Interest.Rate ~ log(loans$Monthly.Income))
+lines(log(loans[!is.na(loans$Monthly.Income),"Monthly.Income"]), lmIRMI$fitted,
+      col="black",lwd=3)
+plot.new()
+legend("center","groups",legend=sort(unique(loans$FICO.Range)), 
+       col=sort(unique(loans$FICO.Range)),cex=0.7,pch=19, 
+       title="FICO Score",ncol=1)
+summary(lmIRMI)
+end.rcode-->
+
+<h3>Plot Interest Rate vs FICO Range</h3>
+<!--begin.rcode Plot Interest Rate vs FICO Range
+boxplot(loans$Interest.Rate ~ loans$FICO.Range, xlab="FICO Range", ylab="Interest Rate(%)", main="Plot Interest Rate vs FICO Range", las=3, cex.axis=0.6)
+lmIRFR <- lm(loans$Interest.Rate ~ loans$FICO.Range)
+summary(lmIRFR)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Open Credit Lines</h3>
+<!--begin.rcode Plot Interest Rate vs Open Credit Lines
+boxplot(loans$Interest.Rate ~ loans$Open.CREDIT.Lines, xlab="Open Credit Lines", ylab="Interest Rate(%)", main="Plot Interest Rate vs Open Credit Lines", las=3, cex.axis=0.6)
+lmIROC <- lm(loans$Interest.Rate ~ loans$Open.CREDIT.Lines)
+summary(lmIROC)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Revolving Credit Balance (log) (FICO Colored)</h3>
+<!--begin.rcode Plot Interest Rate vs Revolving Credit Balance (log)
+par(mar=c(4,4,2,0.5),col=palette(heat.colors(48)))
+layout(matrix(c(1, 1, 2, 2), 2, 2, byrow=F), widths=c(3,1))
+3
+plot(log(loans$Revolving.CREDIT.Balance+1),loans$Interest.Rate, pch=19, col=loans$FICO.Range, ylab="Interest Rate (%)", xlab="Revolving Credit Balance(log($))", main="Interest Rate vs Revolving Credit Balance (FICO Colored)")
+lmIRRCB <- lm(loans$Interest.Rate ~ log(loans$Revolving.CREDIT.Balance+1))
+lines(log(loans[!is.na(loans$Revolving.CREDIT.Balance),
+            "Revolving.CREDIT.Balance"]+1), 
+      lmIRRCB$fitted,
+      col="black",lwd=3)
+plot.new()
+legend("center","groups",legend=sort(unique(loans$FICO.Range)), 
+       col=sort(unique(loans$FICO.Range)),cex=0.7,pch=19, 
+       title="FICO Score",ncol=1)
+summary(lmIRRCB)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Inquiries in the last 6 months</h3>
+<!--begin.rcode Plot Interest Rate vs Inquiries in the last 6 months
+boxplot(loans$Interest.Rate ~ loans$Inquiries.in.the.Last.6.Months, xlab="Number of Inquiries in the last 6 months", ylab="Interest Rate(%)", main="Plot Interest Rate vs Open Credit Lines", las=3, cex.axis=0.6)
+lmIRIL6M <- lm(loans$Interest.Rate ~ loans$Inquiries.in.the.Last.6.Months)
+summary(lmIRIL6M)
+end.rcode-->
+
+<h3>Plot Interest Rate vs Employment Length</h3>
+<!--begin.rcode Plot Interest Rate vs Employment Length
+boxplot(loans$Interest.Rate ~ loans$Employment.Length, xlab="Employment Length", ylab="Interest Rate(%)", main="Plot Interest Rate vs Employment Length", las=3, cex.axis=0.6)
+lmIREL <- lm(loans$Interest.Rate ~ loans$Employment.Length)
+summary(lmIREL)
+end.rcode-->
+</body>
+</html>
