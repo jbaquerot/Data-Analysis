@@ -1,0 +1,284 @@
+Data Analysis - Week 6
+========================================================
+
+Prediction Study Design
+--------------------------------------------------------
+### Steps in building a prediction
+1. Find the right data
+2. Define your error rate 
+3. Split data into:
+  * Training
+  * Testing
+  * Validation (optional)
+4. On the training set pick features
+5. On the training set pick prediction function 
+6. On the training set cross-validate
+7. If no validation - apply 1x to test set
+8. If validation - apply to test set and refine 
+9. If validation - apply 1x to validation
+
+
+
+Cross Validation
+--------------------------------------------------------
+### Overfitting
+```{r}
+set.seed(12345)
+x <- rnorm(10); y <- rnorm(10); z <- rbinom(10,size=1,prob=0.5) 
+plot(x,y,pch=19,col=(z+3))
+```
+
+### Classifier
+Example predictor function: If -0.2 < y < 0.6 call blue, otherwise green
+
+```{r fig.width=10, fig.height=6}
+
+par(mfrow=c(1,2))
+zhat<-(-0.2<y)&(y<0.6)
+plot(x,y,pch=19,col=(z+3)) 
+plot(x,y,pch=19,col=(zhat+3))
+
+```
+
+### New Data
+Example predictor function: If -0.2 < y < 0.6 call blue, otherwise green
+It doesn't work with new data
+```{r fig.width=10, fig.height=6}
+set.seed(1233)
+xnew <- rnorm(10); ynew <- rnorm(10); znew <- rbinom(10,size=1,prob=0.5) 
+par(mfrow=c(1,2)); zhatnew <- (-0.2 < ynew) & (ynew < 0.6) 
+plot(xnew,ynew,pch=19,col=(z+3)); plot(xnew,ynew,pch=19,col=(zhatnew+3))
+```
+
+### Subsampling example
+
+```{r fig.width=10, fig.height=6}
+y1 <- y[1:5]; x1 <- x[1:5]; z1 <- z[1:5]
+y2 <- y[6:10]; x2 <- x[6:10]; z2 <- z[6:10];
+zhat2<-(y2<1)&(y2>-0.5)
+par(mfrow=c(1,3))
+plot(x1,y1,col=(z1+3),pch=19); plot(x2,y2,col=(z2+3),pch=19); plot(x2,y2,col=(zhat2+3),pch=19)
+
+```
+
+Predicting with regression models
+--------------------------------------------------------------
+
+### Example: Old faithful eruptions
+```{r}
+data(faithful) 
+dim(faithful)
+set.seed(333)
+trainSamples <- sample(1:272,size=(272/2),replace=F) 
+trainFaith <- faithful[trainSamples,]
+testFaith <- faithful[-trainSamples,] 
+head(trainFaith)
+
+```
+
+#### Eruption duration versus waiting time
+```{r}
+plot(trainFaith$waiting,trainFaith$eruptions,pch=19,col="blue",xlab="Waiting",ylab="Duration")
+
+```
+#### Fit linear model
+ED = b0 + b1 WT + e
+```{r}
+lm1 <- lm(eruptions ~ waiting,data=trainFaith)
+summary(lm1)
+```
+#### Model Fit
+```{r}
+plot(trainFaith$waiting,trainFaith$eruptions,pch=19,col="blue",xlab="Waiting",ylab="Duration") 
+lines(trainFaith$waiting,lm1$fitted,lwd=3)
+
+```
+
+#### Predict New Value
+
+```{r}
+coef(lm1)[1] + coef(lm1)[2]*80
+
+newdata <- data.frame(waiting=80) 
+predict(lm1,newdata)
+```
+
+#### Plot predictions - training and test
+
+```{r fig.width=10, fig.height=6}
+par(mfrow=c(1,2)) 
+plot(trainFaith$waiting,trainFaith$eruptions,pch=19,col="blue",xlab="Waiting",ylab="Duration") 
+lines(trainFaith$waiting,predict(lm1),lwd=3) 
+plot(testFaith$waiting,testFaith$eruptions,pch=19,col="blue",xlab="Waiting",ylab="Duration") 
+lines(testFaith$waiting,predict(lm1,newdata=testFaith),lwd=3)
+
+```
+
+### Get training set/test set errors
+```{r}
+# Calculate RMSE on training
+sqrt(sum((lm1$fitted-trainFaith$eruptions)^2))
+
+# Calculate RMSE on test
+sqrt(sum((predict(lm1,newdata=testFaith)-testFaith$eruptions)^2))
+
+```
+
+#### Prediction intervals
+```{r}
+pred1 <- predict(lm1,newdata=testFaith,interval="prediction")
+ord <- order(testFaith$waiting) 
+plot(testFaith$waiting,testFaith$eruptions,pch=19,col="blue") 
+matlines(testFaith$waiting[ord],pred1[ord,],type="l",,col=c(1,2,2),lty = c(1,1,1), lwd=3)
+
+```
+
+### Example with binary data: Baltimore Ravens
+
+#### Ravens Data
+```{r}
+##download.file("https://dl.dropbox.com/u/7710864/data/ravensData.rda", destfile="./data/ravensData.rda",method="curl")
+load("./data/ravensData.rda") 
+head(ravensData)
+```
+#### Fit a logistic regresion
+logit(E[RWi|RSi]) = b0 + b1RSi
+
+```{r fig.width=10, fig.height=6}
+glm1 <- glm(ravenWinNum ~ ravenScore,family="binomial",data=ravensData) 
+par(mfrow=c(1,2))
+boxplot(predict(glm1) ~ ravensData$ravenWinNum,col="blue")
+boxplot(predict(glm1,type="response") ~ ravensData$ravenWinNum,col="blue")
+```
+
+#### Choosing a cutoff (re-substitution)
+```{r}
+par(mfrow=c(1,1))
+xx <- seq(0,1,length=10); err <- rep(NA,10) 
+for(i in 1:length(xx)){
+  err[i] <- sum((predict(glm1,type="response") > xx[i]) != ravensData$ravenWinNum) 
+  }
+plot(xx,err,pch=19,xlab="Cutoff",ylab="Error")
+```
+
+#### Comparing models with cross validation
+```{r}
+library(boot)
+cost <- function(win, pred = 0) mean(abs(win-pred) > 0.5)
+glm1 <- glm(ravenWinNum ~ ravenScore,family="binomial",data=ravensData) 
+glm2 <- glm(ravenWinNum ~ ravenScore,family="gaussian",data=ravensData) 
+cv1 <- cv.glm(ravensData,glm1,cost,K=3)
+cv2 <- cv.glm(ravensData,glm2,cost,K=3)
+cv1$delta
+cv2$delta
+```
+
+Predicting with trees
+---------------------------------------------------------------
+### Key Ideas
+* Iteratively split variables into groups
+* Split where maximally predictive
+* Evaluate "homogeneity" within each branch
+* Fitting multiple trees often works better (forests)
+Pros:
+* Easy to implement
+* Easy to interpret
+* Better performance in nonlinear settings
+Cons:
+* Without pruning/cross-validation can lead to overfitting
+* Harder to estimate uncertainty
+* Results may be variable
+
+### Basic algorithm
+1. Start with all variables in one group
+2. Find the variable/split that best separates the outcomes
+3. Divide the data into two groups ("leaves") on that split ("node")
+4. Within each split, find the best variable/split that separates the outcomes 
+5. Continue until the groups are too small or sufficiently "pure"
+
+### Example: Iris Data
+```{r}
+data(iris) 
+names(iris)
+table(iris$Species)
+
+```
+
+#### Iris petal widths/sepal width
+```{r}
+par(mfcol=c(1,1))
+plot(iris$Petal.Width,iris$Sepal.Width,pch=19,col=as.numeric(iris$Species)) 
+legend(1,4.5,legend=unique(iris$Species),col=unique(as.numeric(iris$Species)),pch=19)
+```
+
+#### Iris petal widths/sepal width
+```{r}
+# An alternative is library(rpart)
+library(tree)
+tree1 <- tree(Species ~ Sepal.Width + Petal.Width,data=iris) 
+summary(tree1)
+```
+
+#### Plot tree
+```{r}
+plot(tree1) 
+text(tree1)
+```
+
+#### Another way of looking at a CART model
+```{r}
+plot(iris$Petal.Width,iris$Sepal.Width,pch=19,col=as.numeric(iris$Species)) 
+partition.tree(tree1,label="Species",add=TRUE) 
+legend(1.75,4.5,legend=unique(iris$Species),col=unique(as.numeric(iris$Species)),pch=19)
+
+```
+
+#### Predicting new values
+```{r}
+set.seed(32313)
+newdata <- data.frame(Petal.Width = runif(20,0,2.5),Sepal.Width = runif(20,2,4.5)) 
+pred1 <- predict(tree1,newdata)
+pred1
+```
+
+#### Overlaying new values
+```{r}
+pred1 <- predict(tree1,newdata,type="class") 
+plot(newdata$Petal.Width,newdata$Sepal.Width,col=as.numeric(pred1),pch=19) 
+partition.tree(tree1,"Species",add=TRUE)
+
+```
+
+### Pruning trees example: Cars
+```{r}
+data(Cars93,package="MASS") 
+head(Cars93)
+
+```
+#### Build a tree
+```{r}
+treeCars <- tree(DriveTrain ~ MPG.city + MPG.highway + AirBags + EngineSize + Width + Length + Weight + Price + Cylinders + Horsepower + Wheelbase,data=Cars93)
+plot(treeCars) 
+text(treeCars)
+```
+#### Plot errors
+```{r fig.width=10, fig.height=6}
+par(mfrow=c(1,2)) 
+plot(cv.tree(treeCars,FUN=prune.tree,method="misclass")) 
+plot(cv.tree(treeCars))
+
+```
+
+#### Prune the tree
+```{r fig.width=10, fig.height=6}
+par(mfrow=c(1,1)) 
+pruneTree <- prune.tree(treeCars,best=4) 
+plot(pruneTree)
+text(pruneTree)
+```
+
+#### Show resubstitution error ∗
+```{r}
+table(Cars93$DriveTrain,predict(pruneTree,type="class"))
+table(Cars93$DriveTrain,predict(treeCars,type="class"))
+```
