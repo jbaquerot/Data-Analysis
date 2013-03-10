@@ -3,6 +3,13 @@ Samsung Analysis
 
 Load Library
 --------------------------------------------------------
+```{r}
+library(tree)
+library(stringr)
+library(randomForest)
+
+
+```
 
 
 Processing
@@ -22,16 +29,22 @@ load("../../data/samsungData.rda")
 ```
 Munging Data
 -------------------------------------------------------------
-```{r}
-samsungData$activity <- as.factor(samsungData$activity)
 
+```{r}
+punct <- c("\\(","\\)","\\-","\\,")
+for (i in punct){ 
+  names(samsungData) <- str_replace_all(names(samsungData),i, "_")
+  }
+samsungData$activity <- as.factor(samsungData$activity)
+samsungData$activityNum <- as.numeric(samsungData$activity)
 ```
 ### Look at the data set
 ```{r}
 #head(samsungData)
-summary(samsungData)
-sapply(samsungData[1, ], class)
+#summary(samsungData)
+#sapply(samsungData[1, ], class)
 table(samsungData$activity)
+table(mapply(FUN=class, samsungData))
 ```
 
 ### Find out about missing values
@@ -68,23 +81,555 @@ For this prediction, we don't use validation set of data
 
 ### 4. On the training set pick features
 
-#### Singular value decomposition
-```{r}
-numericActivity <- as.numeric(as.factor(trainingSet$activity))
+#### Singular value decomposition:
+```{r fig.width=12, fig.height=6}
+#numericActivity <- as.numeric(as.factor(trainingSet$activity))
 # Singular value decomposition
-svd1 = svd(scale(trainingSet[ ,-c(562,563)])) 
+svd1 = svd(scale(trainingSet[ ,-c(562,563,564)])) 
 par(mfrow=c(1,2))
-plot(svd1$u[,1],col=numericActivity,pch=19) 
-plot(svd1$u[,2],col=numericActivity,pch=19)
+plot(svd1$u[,1],col=trainingSet$activityNum,pch=19) 
+plot(svd1$u[,2],col=trainingSet$activityNum,pch=19)
 ```
+
+Find maximum contributor:
+```{r}
+# Find maximum contributor
+par(mfrow=c(1,1))
+plot(svd1$v[,2],pch=19)
+```
+
+```{r}
+# Find maximum contributor
+par(mfrow=c(1,1))
+plot(svd1$d^2/sum(svd1$d^2),pch=19)
+```
+
+
+New clustering with maximum contributer:
+```{r}
+source("http://dl.dropbox.com/u/7710864/courseraPublic/myplclust.R")
+# New clustering with maximum contributer
+maxContrib <- which.max(svd1$v[,2])
+distanceMatrix <- dist(trainingSet[ ,c(10:12,maxContrib)]) 
+hclustering <- hclust(distanceMatrix) 
+myplclust(hclustering,lab.col=numericActivity)
+names(trainingSet)[maxContrib]
+```
+#### Pick features on the training set:
+10 names of variables ordered by contribution to prediction
+
+```{r}
+maxContrib <- which.max(svd1$v[,2])
+features<-order(abs(svd1$v[,2]), decreasing=TRUE)
+head(features, n=20)
+```
+
+#### Prediction Trees
+
+__Prediction Tree 1.__ 
+* outcome: activity
+* covariantes: 
+  * fBodyAcc_meanFreq___Z
+  
+```{r fig.width=12, fig.height=6}
+par(mfrow=c(1,1))
+plot(trainingSet$activityNum, trainingSet[,296], pch=19)
+
+tree1 <- tree(activity ~ trainingSet[,296], 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+
+sum(testSamples$activity == predict(tree1, testSamples, type="class"))/length(testSamples)
+
+
+```
+__Prediction Tree 2__ 
+* outcome: activity
+* covariantes: 
+  * fBodyAcc_meanFreq___Z
+  * tBodyGyroMag_arCoeff__1
+
+```{r fig.width=12, fig.height=6}
+
+plot(trainingSet[,296],trainingSet[,249], col=trainingSet$activityNum, pch=19)
+
+tree1 <- tree(activity ~ trainingSet[,296] +  trainingSet[,249], 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+sum(testSamples$activity == predict(tree1, testSamples, type="class"))/length(testSamples)
+```
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- tree(activity ~ trainingSet[,296] +  trainingSet[,249] + trainingSet[,34] + trainingSet[,250], 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+sum(testSamples$activity == predict(tree1, testSamples, type="class"))/length(testSamples)
+```
+
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- tree(activity ~ trainingSet[,296] +  trainingSet[,249] + trainingSet[,34] + trainingSet[,250] + trainingSet[,375] + trainingSet[,76] + trainingSet[,75] + trainingSet[,77] + trainingSet[,74] + trainingSet[,513] + trainingSet[,210] + trainingSet[,223] + trainingSet[,453] + trainingSet[,211] + trainingSet[,224] + trainingSet[,72] + trainingSet[,114] + trainingSet[,73] + trainingSet[,71] + trainingSet[,295], 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+pruneTree <- prune.tree(tree1, best=7)
+plot(pruneTree) 
+text(pruneTree)
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+sum(testSamples$activity == predict(pruneTree, testSamples, type="class"))/length(testSamples)
+
+table(testSamples$activity,predict(pruneTree, testSamples, type="class"))
+
+```
+
+
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- randomForest(activity ~ trainingSet[,296] +  trainingSet[,249] + trainingSet[,34] + trainingSet[,250] + trainingSet[,375] + trainingSet[,76] + trainingSet[,75] + trainingSet[,77] + trainingSet[,74] + trainingSet[,513] + trainingSet[,210] + trainingSet[,223] + trainingSet[,453] + trainingSet[,211] + trainingSet[,224] + trainingSet[,72] + trainingSet[,114] + trainingSet[,73] + trainingSet[,71] + trainingSet[,295], 
+              data=trainingSet, prox=TRUE, ntree=500)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+getTree(tree1)
+table(testSamples$activity,predict(tree1, testSamples))
+
+sum(testSamples$activity == predict(tree1, testSamples))/length(testSamples)
+
+pruneTree <- prune.tree(tree1, best=7)
+plot(pruneTree) 
+text(pruneTree)
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+sum(testSamples$activity == predict(pruneTree, testSamples, type="class"))/length(testSamples)
+
+table(testSamples$activity,predict(pruneTree, testSamples, type="class"))
+
+```
+
+__Prediction Tree 3__ 
+* outcome: activity
+* covariantes: 
+  * fBodyAcc_meanFreq___Z
+  * tBodyGyroMag_arCoeff__1
+  * tBodyAcc_arCoeff___Z_1
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- tree(activity ~ fBodyAcc_meanFreq___Z + tBodyGyroMag_arCoeff__1 + tBodyAcc_arCoeff___Z_1, 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+
+sum(testSet$activity == predict(tree1, testSet, type="class"))/length(trainingSet)
+```
+
+__Prediction Tree 4__ 
+* outcome: activity
+* covariantes: 
+  * fBodyAcc_meanFreq___Z
+  * tBodyGyroMag_arCoeff__1
+  * tBodyAcc_arCoeff___Z_1
+  * tBodyGyroMag_arCoeff__2
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- tree(activity ~ fBodyAcc_meanFreq___Z + tBodyGyroMag_arCoeff__1 + tBodyAcc_arCoeff___Z_1 + tBodyGyroMag_arCoeff__2, 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+
+sum(testSet$activity == predict(tree1, testSet, type="class"))/length(trainingSet)
+```
+
+
+__Prediction Tree 4__ 
+* outcome: activity
+* covariantes: 
+  * all variables
+
+```{r fig.width=12, fig.height=6}
+
+tree1 <- tree(activity ~ ., 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+
+sum(testSet$activity == predict(tree1, testSet, type="class"))/length(trainingSet)
+```
+### Poison Regression
+
+```{r}
+glm1 <- glm(activityNum ~ fBodyAcc_meanFreq___Z + tBodyGyroMag_arCoeff__1 + tBodyAcc_arCoeff___Z_1 + tBodyGyroMag_arCoeff__2, data = trainingSet)
+
+sum(testSet$activityNum == floor(predict(glm1, testSet)))/length(trainingSet)
+
+
+lm1 <- lm(activityNum ~ fBodyAcc_meanFreq___Z + tBodyGyroMag_arCoeff__1 + tBodyAcc_arCoeff___Z_1 + tBodyGyroMag_arCoeff__2, data = trainingSet)
+
+sum(testSet$activityNum == floor(predict(lm1, testSet)))/length(trainingSet)
+
+
+```
+
+
+
+
+
+#### K-means clustering
+```{r}
+kClust <- kmeans(trainingSet[ ,-c(562,563)],centers=6,nstart=100) 
+table(kClust$cluster,trainingSet$activity)
+```
+
+Custer 1 Variable Centers(Laying)
+```{r}
+par(mfrow=c(1,1))
+plot(kClust$center[1,1:10],pch=19,ylab="Cluster Center",xlab="")
+```
+
+Custer 2 Variable Centers(Walkin)
+```{r}
+par(mfrow=c(1,1))
+plot(kClust$center[6,1:10],pch=19,ylab="Cluster Center",xlab="")
+```
+
+
 
 
 ### 5. On the training set pick prediction function
 
 ### 6. On the training set cross-validate
 
+```{r}
+
+```
+
+
 ### 7. If no validation - apply 1x to test set
 
 ### 8. If validation - apply to test set and refine 
 
 ### 9. If validation - apply 1x to validation
+
+
+```{r}
+library(splines)
+ns1 <- ns(trainingSet$fBodyAcc_meanFreq___Z,df=1)
+par(mfrow=c(1,3))
+plot(trainingSet$activityNum,ns1[,1])
+plot(trainingSet$activityNum,ns1[,2])
+plot(trainingSet$activityNum,ns1[,3])
+
+lm1 <- lm(trainingSet$activityNum ~ ns1)
+summary(lm1)
+
+sum(testSamples$activityNum == round(predict(lm1, testSamples)))/length(testSamples)
+
+table(testSamples$activityNum,round(predict(lm1, testSamples)))
+
+```
+
+```{r}
+
+
+
+```
+
+```{r fig.width=12, fig.height=6}
+
+# Singular value decomposition
+
+
+tree1 <- tree(activity ~ trainingSet$angle_Y_gravityMean_ + trainingSet$fBodyAccJerk_bandsEnergy___1_8 + trainingSet$tGravityAcc_min___Y, 
+              data=trainingSet)
+summary(tree1)
+plot(tree1) 
+text(tree1)
+
+
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+sum(testSamples$activity == predict(tree1, testSamples, type="class"))/length(testSamples)
+
+plot(colMeans(trainingSet[trainingSet$activityNum==6,-c(562,563,564)]), pch=19)
+
+```
+
+### Laying
+
+```{r fig.width=12, fig.height=6}
+
+activity <- "laying"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+
+#layingTree <- tree(activity ~ 
+#                tGravityAcc_mean___X
+            #  + tGravityAcc_mean___Y
+            #    + tBodyAcc_arCoeff___Y_1
+            #  + tBodyAcc_correlation___Y_Z
+#             ,
+#              data=trainingSet)
+
+layingTree <- randomForest(activity ~ 
+                             tGravityAcc_mean___X,
+             data=trainingSet, prox=TRUE, ntree=50)
+
+
+tree1 <- layingTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+text(tree1)
+
+
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+
+
+```
+
+
+### Sitting
+
+```{r fig.width=12, fig.height=6}
+
+activity <- "sitting"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+
+sittingTree <- randomForest(activity ~ 
+                tGravityAcc_mean___Y
+            #  + tGravityAcc_min___Y
+            #   +tGravityAcc_max___Y
+             #   + tBodyAcc_correlation___X_Y
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+
+
+tree1 <- sittingTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+text(tree1)
+
+
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+
+
+```
+
+### Standing
+
+```{r fig.width=12, fig.height=6}
+
+activity <- "standing"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+
+
+
+standingTree <- randomForest(activity ~ 
+             angle_Y_gravityMean_
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+
+
+tree1 <- sittingTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+#text(tree1)
+
+
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+
+
+```
+### Walk
+
+```{r fig.width=12, fig.height=6}
+
+activity <- "walk"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+
+
+
+walkTree <- randomForest(activity ~ 
+                               tBodyAccJerk_energy___X
+                               
+                               + fBodyAcc_max___X
+                               #fBodyAccJerk_bandsEnergy___1_8
+                             #+
+                              #fBodyAccJerk_maxInds_X
+          #   fBodyBodyAccJerkMag_mean__
+           #                  +fBodyAccJerk_bandsEnergy___1_16
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+
+
+tree1 <- walkTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+#text(tree1)
+
+
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+```
+
+
+### Walkdown
+
+```{r fig.width=12, fig.height=6}
+activity <- "walkdown"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+walkdownTree <- randomForest(activity ~ 
+                               tBodyAcc_energy___X
+                             +  tBodyAcc_std___X
+                            + tBodyAcc_mad___X
+                            # + tBodyAccJerk_max___X
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+tree1 <- walkdownTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+#text(tree1)
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+```
+
+### Walkup
+
+```{r fig.width=12, fig.height=6}
+activity <- "walkup"
+trainingSetActivity <- trainingSet[ trainingSet$activity==activity,]
+walkup <- randomForest(activity ~ 
+                         tGravityAcc_energy___Y      
+                       #  tGravityAcc_mean___Y
+                       + tBodyAccJerk_std___X
+                       + tBodyAccJerk_std___Z
+                      #+ tGravityAcc_max___Y
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+tree1 <- walkup
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+#text(tree1)
+
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+print(c("Sensitivity:",activity))
+sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)
+print(c("Specificity:", activity))
+sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity)
+```
+
+
+### Combining randomForest
+```{r}
+combineTree <- randomForest(activity ~ 
+                tGravityAcc_mean___Y # laying
+                + tGravityAcc_mean___X # sitting
+                + angle_Y_gravityMean_  # standing
+                + tBodyAccJerk_energy___X #walk
+                + fBodyAcc_max___X #walk
+                + tBodyAcc_energy___X #walkdown
+                + tBodyAcc_std___X #walkdown
+                + tBodyAcc_mad___X #walkdown
+               # + tGravityAcc_energy___Y     # walkup 
+                + tBodyAccJerk_std___X # walkup
+                + tBodyAccJerk_std___Z # walkup
+              ,
+              data=trainingSet, prox=TRUE, ntree=50)
+
+tree1 <- combineTree
+summary(tree1)
+par(mfrow=c(1,1))
+plot(tree1) 
+#text(tree1)
+set.seed(333)
+testSamples <- testSet[sample(1:371,size=328,replace=T),]
+table(testSamples$activity,predict(tree1, testSamples, type="class"))
+
+for(activity in c("laying","sitting", "standing","walk","walkdown","walkup")){
+  print(c("Sensitivity:",activity,":",sum(activity == predict(tree1, testSamples[testSamples$activity==activity,], type="class"))/sum(testSamples$activity==activity)))
+  print(c("Specificity:", activity, ":", sum(activity != predict(tree1, testSamples[testSamples$activity!=activity,], type="class"))/sum(testSamples$activity!=activity) ))
+}
+
+
+```
+
